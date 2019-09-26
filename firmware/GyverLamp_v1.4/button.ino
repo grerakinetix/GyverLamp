@@ -1,4 +1,7 @@
-#ifdef ESP_USE_BUTTON
+#define CLICK_BRIGHTNESS_STEP (4U)                          // шаг изменения яркости по нажатию на кнопку (для конфигурации от 3 кнопок)
+#define HOLD_BRIGHTNESS_STEP  (2U)                          // шаг изменения яркости при зажатии кнопки
+#define HOLD_SCALE_STEP       (3U)                          // шаг изменения масштаба при зажатии кнопки
+
 bool brightDirection;
 
 void buttonTick()
@@ -10,7 +13,7 @@ void buttonTick()
     {
       manualOff = true;
       dawnFlag = false;
-      FastLED.setBrightness(modes[currentMode].Brightness);
+      FastLED.setBrightness(getCurrentBrightness());
       changePower();
     }
     else
@@ -21,66 +24,185 @@ void buttonTick()
     loadingFlag = true;
   }
 
-  if (ONflag && touch.isDouble())
+  if (ONflag)
   {
-    if (++currentMode >= MODE_AMOUNT) currentMode = 0;
-    FastLED.setBrightness(modes[currentMode].Brightness);
-    loadingFlag = true;
-    settChanged = true;
-    eepromTimeout = millis();
-    FastLED.clear();
-    delay(1);
-  }
+    #if (BUTTONS_COUNT < 5)
+      if (touch.isDouble())
+      {
+        currentMode = (currentMode + 1) % MODE_AMOUNT;
+        FastLED.setBrightness(getCurrentBrightness());
+        loadingFlag = true;
+        settChanged = true;
+        eepromTimeout = millis();
+        #ifdef GENERAL_DEBUG
+          Serial.printf_P(PSTR("Mode changed: %d (Brightness: %d, Speed: %d, Scale: %d)\n"), currentMode, modes[currentMode].Brightness, modes[currentMode].Speed, modes[currentMode].Scale);
+        #endif
+        FastLED.clear();
+        delay(1);
+      }
+      
+      if (touch.isTriple())
+      {
+        currentMode = (currentMode - 1 + MODE_AMOUNT) % MODE_AMOUNT;
+        FastLED.setBrightness(getCurrentBrightness());
+        loadingFlag = true;
+        settChanged = true;
+        eepromTimeout = millis();
+        #ifdef GENERAL_DEBUG
+          Serial.printf_P(PSTR("Mode changed: %d (Brightness: %d, Speed: %d, Scale: %d)\n"), currentMode, modes[currentMode].Brightness, modes[currentMode].Speed, modes[currentMode].Scale);
+        #endif
+        FastLED.clear();
+        delay(1);
+      }
+    #endif
+    
+    #if (BUTTONS_COUNT < 3)
+      if (touch.isHolded())
+      {
+        brightDirection = !brightDirection;
+      }
 
-  if (ONflag && touch.isTriple())
-  {
-    if (--currentMode < 0) currentMode = MODE_AMOUNT - 1;
-    FastLED.setBrightness(modes[currentMode].Brightness);
-    loadingFlag = true;
-    settChanged = true;
-    eepromTimeout = millis();
-    FastLED.clear();
-    delay(1);
-  }
+      if (touch.isStep())
+      {
+        if (brightDirection && modes[currentMode].Brightness < 101 - HOLD_BRIGHTNESS_STEP)
+        {
+          modes[currentMode].Brightness += HOLD_BRIGHTNESS_STEP;
+          setCurrentBrightness();
+        }
+        else if (!brightDirection && modes[currentMode].Brightness > HOLD_BRIGHTNESS_STEP)
+        {
+          modes[currentMode].Brightness -= HOLD_BRIGHTNESS_STEP;
+          setCurrentBrightness();
+        }
+      }
+    #endif
 
-  if (ONflag && touch.hasClicks() && touch.getClicks() >= 4)
-  {
     #ifdef OTA
-    if (otaManager.RequestOtaUpdate())
-    {
-      currentMode = EFF_MATRIX;                             // принудительное включение режима "Матрица" для индикации перехода в режим обновления по воздуху
-      FastLED.clear();
-      delay(1);
-    }
+      if (touch.hasClicks() && touch.getClicks() >= 4)
+      {
+        if (otaManager.RequestOtaUpdate())
+        {
+          currentMode = EFF_MATRIX;                            // принудительное включение режима "Матрица" для индикации перехода в режим обновления по воздуху
+          FastLED.clear();
+          delay(1);
+        }
+      }
     #endif
   }
+}
 
-  if (ONflag && touch.isHolded())
+#if (BUTTONS_COUNT >= 3)
+void verticalButtonsTick()
+{
+  touchUp.tick();
+  touchDown.tick();
+
+  if (touchUp.isClick() && modes[currentMode].Brightness < 101 - CLICK_BRIGHTNESS_STEP)
   {
-    brightDirection = !brightDirection;
+    modes[currentMode].Brightness += CLICK_BRIGHTNESS_STEP;
+    setCurrentBrightness();
   }
-
-  if (ONflag && touch.isStep())
+  
+  if (touchUp.isStep() && modes[currentMode].Brightness < 101 - HOLD_BRIGHTNESS_STEP)
   {
-    if (brightDirection)
-    {
-      if (modes[currentMode].Brightness < 10) modes[currentMode].Brightness += 1;
-      else if (modes[currentMode].Brightness < 250) modes[currentMode].Brightness += 5;
-      else modes[currentMode].Brightness = 255;
-    }
-    else
-    {
-      if (modes[currentMode].Brightness > 15) modes[currentMode].Brightness -= 5;
-      else if (modes[currentMode].Brightness > 1) modes[currentMode].Brightness -= 1;
-      else modes[currentMode].Brightness = 0;
-    }
-    FastLED.setBrightness(modes[currentMode].Brightness);
+    modes[currentMode].Brightness += HOLD_BRIGHTNESS_STEP;
+    setCurrentBrightness();
+  }
+  
+  if (touchDown.isClick() && modes[currentMode].Brightness > CLICK_BRIGHTNESS_STEP)
+  {
+    modes[currentMode].Brightness -= CLICK_BRIGHTNESS_STEP;
+    setCurrentBrightness();
+  }
+  
+  if (touchDown.isStep() && modes[currentMode].Brightness > HOLD_BRIGHTNESS_STEP)
+  {
+    modes[currentMode].Brightness -= HOLD_BRIGHTNESS_STEP;
+    setCurrentBrightness();
+  }
+}
+#endif
+
+#if (BUTTONS_COUNT >= 5)
+void horizontalButtonsTick()
+{
+  touchLeft.tick();
+  touchRight.tick();
+
+  if (touchRight.isClick())
+  {
+    currentMode = (currentMode + 1) % MODE_AMOUNT;
+    FastLED.setBrightness(getCurrentBrightness());
+    loadingFlag = true;
     settChanged = true;
     eepromTimeout = millis();
-
     #ifdef GENERAL_DEBUG
-    Serial.printf_P(PSTR("New brightness value: %d\n"), modes[currentMode].Brightness);
+      Serial.printf_P(PSTR("Mode changed: %d (Brightness: %d, Speed: %d, Scale: %d)\n"), currentMode, modes[currentMode].Brightness, modes[currentMode].Speed, modes[currentMode].Scale);
     #endif
+    FastLED.clear();
+    delay(1);
+  }
+
+  if (touchLeft.isClick())
+  {
+    currentMode = (currentMode - 1 + MODE_AMOUNT) % MODE_AMOUNT;
+    FastLED.setBrightness(getCurrentBrightness());
+    loadingFlag = true;
+    settChanged = true;
+    eepromTimeout = millis();
+    #ifdef GENERAL_DEBUG
+      Serial.printf_P(PSTR("Mode changed: %d (Brightness: %d, Speed: %d, Scale: %d)\n"), currentMode, modes[currentMode].Brightness, modes[currentMode].Speed, modes[currentMode].Scale);
+    #endif
+    FastLED.clear();
+    delay(1);
+  }
+
+  if (touchRight.isStep())
+  {
+    if (isCyclic(currentMode))
+    {
+      modes[currentMode].Scale = (modes[currentMode].Scale + 99 + HOLD_SCALE_STEP) % 100 + 1;
+      loadingFlag = true;
+      settChanged = true;
+      eepromTimeout = millis();
+      #ifdef GENERAL_DEBUG
+        Serial.printf_P(PSTR("New scale value: %d\n"), modes[currentMode].Scale);
+      #endif
+    }
+    else if (modes[currentMode].Scale < 101 - HOLD_SCALE_STEP)
+    {
+      modes[currentMode].Scale += HOLD_SCALE_STEP;
+      loadingFlag = true;
+      settChanged = true;
+      eepromTimeout = millis();
+      #ifdef GENERAL_DEBUG
+        Serial.printf_P(PSTR("New scale value: %d\n"), modes[currentMode].Scale);
+      #endif
+    }
+  }
+  
+  if (touchLeft.isStep())
+  {
+    if (isCyclic(currentMode))
+    {
+      modes[currentMode].Scale = (modes[currentMode].Scale + 99 - HOLD_SCALE_STEP) % 100 + 1;
+      loadingFlag = true;
+      settChanged = true;
+      eepromTimeout = millis();
+      #ifdef GENERAL_DEBUG
+        Serial.printf_P(PSTR("New scale value: %d\n"), modes[currentMode].Scale);
+      #endif
+    }
+    else if (modes[currentMode].Scale > HOLD_SCALE_STEP)
+    {
+      modes[currentMode].Scale -= HOLD_SCALE_STEP;
+      loadingFlag = true;
+      settChanged = true;
+      eepromTimeout = millis();
+      #ifdef GENERAL_DEBUG
+        Serial.printf_P(PSTR("New scale value: %d\n"), modes[currentMode].Scale);
+      #endif
+    }
   }
 }
 #endif

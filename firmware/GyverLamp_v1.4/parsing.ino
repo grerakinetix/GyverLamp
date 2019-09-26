@@ -37,14 +37,14 @@ void parseUDP()
       FastLED.clear();
       delay(1);
       sendCurrent();
-      FastLED.setBrightness(modes[currentMode].Brightness);
+      FastLED.setBrightness(getCurrentBrightness());
     }
 
     else if (!strncmp_P(inputBuffer, PSTR("BRI"), 3))
     {
       memcpy(buff, &inputBuffer[3], strlen(inputBuffer));   // взять подстроку, состоящую последних символов строки inputBuffer, начиная с символа 4
-      modes[currentMode].Brightness = constrain(atoi(buff), 1, 255);
-      FastLED.setBrightness(modes[currentMode].Brightness);
+      modes[currentMode].Brightness = constrain(atoi(buff), 1, 100);
+      FastLED.setBrightness(getCurrentBrightness());
       settChanged = true;
       eepromTimeout = millis();
       sendCurrent();

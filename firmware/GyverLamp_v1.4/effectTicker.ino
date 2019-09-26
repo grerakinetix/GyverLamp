@@ -46,20 +46,20 @@ void changePower()
   if (ONflag)
   {
     effectsTick();
-    for (uint8_t i = 0; i < modes[currentMode].Brightness; i = constrain(i + 8, 0, modes[currentMode].Brightness))
+    for (uint8_t i = 0; i < getCurrentBrightness(); i = constrain(i + 8, 0, getCurrentBrightness()))
     {
       FastLED.setBrightness(i);
       delay(1);
       FastLED.show();
     }
-    FastLED.setBrightness(modes[currentMode].Brightness);
+    FastLED.setBrightness(getCurrentBrightness());
     delay(2);
     FastLED.show();
   }
   else
   {
     effectsTick();
-    for (uint8_t i = modes[currentMode].Brightness; i > 0; i = constrain(i - 8, 0, modes[currentMode].Brightness))
+    for (uint8_t i = getCurrentBrightness(); i > 0; i = constrain(i - 8, 0, getCurrentBrightness()))
     {
       FastLED.setBrightness(i);
       delay(1);
