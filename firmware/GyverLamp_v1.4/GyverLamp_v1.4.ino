@@ -76,13 +76,13 @@
 #include "Types.h"
 #include "timerMinim.h"
 #ifdef ESP_USE_BUTTON
-#include <GyverButton.h>
+  #include <GyverButton.h>
 #endif
 #ifdef USE_NTP
-#include <NTPClient.h>
+  #include <NTPClient.h>
 #endif
 #ifdef OTA
-#include "OtaManager.h"
+  #include "OtaManager.h"
 #endif
 #include "TimerManager.h"
 #include "FavoritesManager.h"
@@ -96,18 +96,26 @@ WiFiServer wifiServer(ESP_HTTP_PORT);
 WiFiUDP Udp;
 
 #ifdef USE_NTP
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, NTP_ADDRESS, GMT * 3600, NTP_INTERVAL);
+  WiFiUDP ntpUDP;
+  NTPClient timeClient(ntpUDP, NTP_ADDRESS, GMT * 3600, NTP_INTERVAL);
 #endif
 
 timerMinim timeTimer(3000);
 
 #ifdef ESP_USE_BUTTON
-GButton touch(BTN_PIN, LOW_PULL, NORM_OPEN);
+  GButton touch(BTN_PIN, LOW_PULL, NORM_OPEN);
+  #if (BUTTONS_COUNT >= 3)
+    GButton touchUp(UP_BTN_PIN, LOW_PULL, NORM_OPEN);
+    GButton touchDown(DOWN_BTN_PIN, LOW_PULL, NORM_OPEN);
+  #endif
+  #if (BUTTONS_COUNT == 5)
+    GButton touchLeft(LEFT_BTN_PIN, LOW_PULL, NORM_OPEN);
+    GButton touchRight(RIGHT_BTN_PIN, LOW_PULL, NORM_OPEN);
+  #endif
 #endif
 #ifdef OTA
-OtaManager otaManager;
-OtaPhase OtaManager::OtaFlag = OtaPhase::None;
+  OtaManager otaManager;
+  OtaPhase OtaManager::OtaFlag = OtaPhase::None;
 #endif
 
 // --- ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ -------
@@ -154,17 +162,31 @@ void setup()
   //ESP.wdtEnable(WDTO_8S);
 
   #ifdef ESP_USE_BUTTON
-  touch.setStepTimeout(100);
-  touch.setClickTimeout(500);
-  buttonTick();
-  if (touch.state())                                        // сброс сохранённых SSID и пароля при старте с зажатой кнопкой
-  {
-    wifiManager.resetSettings();
-
-    #ifdef GENERAL_DEBUG
-    Serial.println(F("Настройки WiFiManager сброшены"));
+    touch.setStepTimeout(100);
+    touch.setClickTimeout(500);
+    #if (BUTTONS_COUNT >= 3)
+      Serial.println(F("Инициализация кнопок вверх/вниз"));
+      touchUp.setStepTimeout(100);
+      touchUp.setClickTimeout(500);
+      touchDown.setStepTimeout(100);
+      touchDown.setClickTimeout(500);
     #endif
-  }
+    #if (BUTTONS_COUNT == 5)
+      Serial.println(F("Инициализация кнопок влево/вправо"));
+      touchLeft.setStepTimeout(100);
+      touchLeft.setClickTimeout(500);
+      touchRight.setStepTimeout(100);
+      touchRight.setClickTimeout(500);
+    #endif
+    buttonTick();
+    if (touch.state())                                        // сброс сохранённых SSID и пароля при старте с зажатой кнопкой
+    {
+      wifiManager.resetSettings();
+
+      #ifdef GENERAL_DEBUG
+        Serial.println(F("Настройки WiFiManager сброшены"));
+      #endif
+    }
   #endif
 
   // ЛЕНТА
@@ -223,9 +245,9 @@ void setup()
       Serial.println(F("Время ожидания ввода SSID и пароля от WiFi сети или подключения к WiFi сети превышено\nПерезагрузка модуля"));
 
       #if defined(ESP8266)
-      ESP.reset();
+        ESP.reset();
       #else
-      ESP.restart();
+        ESP.restart();
       #endif
     }
 
@@ -242,7 +264,7 @@ void setup()
     &(FavoritesManager::SaveFavoritesToEeprom));
 
   #ifdef USE_NTP
-  timeClient.begin();
+    timeClient.begin();
   #endif
 
   memset(matrixValue, 0, sizeof(matrixValue));
@@ -258,13 +280,21 @@ void loop()
   effectsTick();
   EepromManager::HandleEepromTick(&settChanged, &eepromTimeout, &currentMode, modes, &(FavoritesManager::SaveFavoritesToEeprom));
   #ifdef USE_NTP
-  timeTick();
+    timeTick();
   #endif
   #ifdef ESP_USE_BUTTON
-  buttonTick();
+    buttonTick();
+    #if (BUTTONS_COUNT >= 3)
+      if (ONflag)
+        verticalButtonsTick();
+    #endif
+    #if (BUTTONS_COUNT >= 5)
+      if (ONflag)
+        horizontalButtonsTick();
+    #endif
   #endif
   #ifdef OTA
-  otaManager.HandleOtaUpdate();                             // ожидание и обработка команды на обновление прошивки по воздуху
+    otaManager.HandleOtaUpdate();                           // ожидание и обработка команды на обновление прошивки по воздуху
   #endif
   TimerManager::HandleTimer(&ONflag, &changePower);         // обработка событий таймера отключения лампы
   if (FavoritesManager::HandleFavorites(                    // обработка режима избранных эффектов
@@ -272,11 +302,11 @@ void loop()
       &currentMode,
       &loadingFlag
       #ifdef USE_NTP
-      , &dawnFlag
+        , &dawnFlag
       #endif
       ))
   {
-    FastLED.setBrightness(modes[currentMode].Brightness);
+    FastLED.setBrightness(getCurrentBrightness());
     FastLED.clear();
     delay(1);
   }
